@@ -38,6 +38,9 @@ export default function Index() {
   const [battleResult, setBattleResult] = useState<'victory' | 'defeat' | null>(null);
   const [turnCount, setTurnCount] = useState(0);
   const [damageDealt, setDamageDealt] = useState(0);
+  const [damageTaken, setDamageTaken] = useState(0);
+  const [spellsCast, setSpellsCast] = useState(0);
+  const [maxDamageSpell, setMaxDamageSpell] = useState({ name: '', damage: 0 });
 
   const characters: Character[] = [
     {
@@ -169,6 +172,7 @@ export default function Index() {
     setEnemyCharacter({ ...enemy, mana: restoredEnemyMana });
     setSelectedCharacter({ ...player, hp: newPlayerHp });
     setBattleLog(prev => [...prev, `🔮 ${enemy.name} использует ${randomSpell.name}! Урон: ${randomSpell.damage}`]);
+    setDamageTaken(prev => prev + randomSpell.damage);
 
     if (newPlayerHp === 0) {
       setBattleLog(prev => [...prev, `💀 Поражение! ${player.name} повержен!`]);
@@ -201,6 +205,10 @@ export default function Index() {
     setBattleLog(prev => [...prev, `⚔️ ${selectedCharacter.name} использует ${spell.name}! Урон: ${spell.damage}`]);
     setTurnCount(prev => prev + 1);
     setDamageDealt(prev => prev + spell.damage);
+    setSpellsCast(prev => prev + 1);
+    if (spell.damage > maxDamageSpell.damage) {
+      setMaxDamageSpell({ name: spell.name, damage: spell.damage });
+    }
 
     if (newEnemyHp === 0) {
       setBattleLog(prev => [...prev, `🏆 Победа! ${enemyCharacter.name} повержен!`]);
@@ -222,14 +230,24 @@ export default function Index() {
   }, [isPlayerTurn, selectedCharacter, enemyCharacter, gameOver]);
 
   const startBattle = (player: Character, enemy: Character) => {
+    const buffedEnemy = {
+      ...enemy,
+      hp: Math.floor(enemy.hp * 1.4),
+      maxHp: Math.floor(enemy.maxHp * 1.4),
+      spells: enemy.spells.map(s => ({ ...s, damage: Math.floor(s.damage * 1.3) }))
+    };
+    
     setSelectedCharacter({ ...player });
-    setEnemyCharacter({ ...enemy });
-    setBattleLog([`⚔️ Бой начат! ${player.name} VS ${enemy.name}`]);
+    setEnemyCharacter(buffedEnemy);
+    setBattleLog([`⚔️ Бой начат! ${player.name} VS ${enemy.name}`, `⚠️ Противник усилен: +40% HP, +30% урон`]);
     setIsPlayerTurn(true);
     setGameOver(false);
     setBattleResult(null);
     setTurnCount(0);
     setDamageDealt(0);
+    setDamageTaken(0);
+    setSpellsCast(0);
+    setMaxDamageSpell({ name: '', damage: 0 });
   };
 
   const restartBattle = () => {
@@ -250,6 +268,17 @@ export default function Index() {
     setIsPlayerTurn(true);
     setTurnCount(0);
     setDamageDealt(0);
+    setDamageTaken(0);
+    setSpellsCast(0);
+    setMaxDamageSpell({ name: '', damage: 0 });
+  };
+
+  const surrender = () => {
+    if (!selectedCharacter || !enemyCharacter || gameOver) return;
+    setBattleLog(prev => [...prev, `🏳️ ${selectedCharacter.name} сдаётся!`]);
+    playSound('defeat');
+    setGameOver(true);
+    setBattleResult('defeat');
   };
 
   const getElementColor = (element: 'fire' | 'ice' | 'dark') => {
@@ -371,15 +400,28 @@ export default function Index() {
                       </div>
                     </div>
 
-                    <div className="mb-3 text-center">
-                      {gameOver ? (
-                        <Badge variant="outline" className="text-sm py-1">
-                          Бой завершён
-                        </Badge>
-                      ) : (
-                        <Badge variant={isPlayerTurn ? 'default' : 'secondary'} className="text-sm py-1 animate-pulse">
-                          {isPlayerTurn ? '🎯 Ваш ход' : '⏳ Ход противника'}
-                        </Badge>
+                    <div className="mb-3 space-y-2">
+                      <div className="text-center">
+                        {gameOver ? (
+                          <Badge variant="outline" className="text-sm py-1">
+                            Бой завершён
+                          </Badge>
+                        ) : (
+                          <Badge variant={isPlayerTurn ? 'default' : 'secondary'} className="text-sm py-1 animate-pulse">
+                            {isPlayerTurn ? '🎯 Ваш ход' : '⏳ Ход противника'}
+                          </Badge>
+                        )}
+                      </div>
+                      {!gameOver && (
+                        <Button 
+                          onClick={surrender} 
+                          variant="ghost" 
+                          size="sm" 
+                          className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Icon name="Flag" className="mr-2 h-4 w-4" />
+                          Сдаться
+                        </Button>
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -450,23 +492,39 @@ export default function Index() {
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4 mb-6 max-w-md mx-auto">
-                      <div className="p-4 bg-muted/50 rounded-lg">
-                        <Icon name="Zap" className="h-6 w-6 mx-auto mb-2 text-fire" />
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                      <div className="p-4 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                        <Icon name="Target" className="h-5 w-5 mx-auto mb-2 text-fire" />
                         <div className="text-2xl font-heading font-bold">{damageDealt}</div>
-                        <div className="text-xs text-muted-foreground">Урона</div>
+                        <div className="text-xs text-muted-foreground">Нанесено урона</div>
                       </div>
-                      <div className="p-4 bg-muted/50 rounded-lg">
-                        <Icon name="Swords" className="h-6 w-6 mx-auto mb-2 text-ice" />
-                        <div className="text-2xl font-heading font-bold">{turnCount}</div>
-                        <div className="text-xs text-muted-foreground">Ходов</div>
+                      <div className="p-4 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                        <Icon name="Shield" className="h-5 w-5 mx-auto mb-2 text-destructive" />
+                        <div className="text-2xl font-heading font-bold">{damageTaken}</div>
+                        <div className="text-xs text-muted-foreground">Получено урона</div>
                       </div>
-                      <div className="p-4 bg-muted/50 rounded-lg">
-                        <Icon name="Heart" className="h-6 w-6 mx-auto mb-2 text-destructive" />
+                      <div className="p-4 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                        <Icon name="Sparkles" className="h-5 w-5 mx-auto mb-2 text-ice" />
+                        <div className="text-2xl font-heading font-bold">{spellsCast}</div>
+                        <div className="text-xs text-muted-foreground">Способностей</div>
+                      </div>
+                      <div className="p-4 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                        <Icon name="Heart" className="h-5 w-5 mx-auto mb-2 text-primary" />
                         <div className="text-2xl font-heading font-bold">{selectedCharacter.hp}</div>
                         <div className="text-xs text-muted-foreground">HP осталось</div>
                       </div>
                     </div>
+
+                    {maxDamageSpell.damage > 0 && (
+                      <div className="mb-6 p-4 bg-muted/30 rounded-lg border border-fire/50">
+                        <div className="flex items-center justify-center gap-2 text-fire">
+                          <Icon name="Flame" className="h-5 w-5" />
+                          <span className="font-heading font-semibold">Мощнейший удар:</span>
+                          <span className="text-lg font-bold">{maxDamageSpell.name}</span>
+                          <Badge variant="destructive">{maxDamageSpell.damage} урона</Badge>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex gap-3 justify-center">
                       <Button onClick={restartBattle} size="lg" className="font-heading">
