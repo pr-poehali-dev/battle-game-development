@@ -6,7 +6,7 @@ export default {
 		"./pages/**/*.{ts,tsx}",
 		"./components/**/*.{ts,tsx}",
 		"./app/**/*.{ts,tsx}",
-		"./src/**/*.{ts,tsx}",
+		"./src/**/*.{ts,tsx}"
 	],
 	prefix: "",
 	theme: {
@@ -18,7 +18,15 @@ export default {
 			}
 		},
 		extend: {
+			fontFamily: {
+				sans: ['Rubik', 'system-ui', 'sans-serif'],
+				heading: ['Montserrat', 'system-ui', 'sans-serif']
+			},
 			colors: {
+				fire: '#F97316',
+				ice: '#0EA5E9',
+				dark: '#8B5CF6',
+				mana: '#33C3F0',
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
@@ -84,11 +92,27 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'pulse-glow': {
+					'0%, 100%': { boxShadow: '0 0 20px rgba(51, 195, 240, 0.5)' },
+					'50%': { boxShadow: '0 0 40px rgba(51, 195, 240, 0.8)' }
+				},
+				'damage-flash': {
+					'0%, 100%': { opacity: '1' },
+					'50%': { opacity: '0.3' }
+				},
+				'spell-cast': {
+					'0%': { transform: 'scale(1)', opacity: '1' },
+					'50%': { transform: 'scale(1.1)', opacity: '0.8' },
+					'100%': { transform: 'scale(1)', opacity: '1' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
+				'damage-flash': 'damage-flash 0.3s ease-in-out',
+				'spell-cast': 'spell-cast 0.5s ease-in-out'
 			}
 		}
 	},
