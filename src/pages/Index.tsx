@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -33,6 +33,8 @@ export default function Index() {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [enemyCharacter, setEnemyCharacter] = useState<Character | null>(null);
   const [battleLog, setBattleLog] = useState<string[]>([]);
+  const [isPlayerTurn, setIsPlayerTurn] = useState(true);
+  const [gameOver, setGameOver] = useState(false);
 
   const characters: Character[] = [
     {
@@ -103,8 +105,79 @@ export default function Index() {
     { id: 'a4', name: 'Тёмный властелин', description: 'Выиграйте 100 боёв', icon: 'Crown', unlocked: false },
   ];
 
+  const playSound = (type: 'attack' | 'heal' | 'victory' | 'defeat') => {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    if (type === 'attack') {
+      oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.1);
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.1);
+    } else if (type === 'heal') {
+      oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.2);
+      gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.2);
+    } else if (type === 'victory') {
+      [523, 659, 784, 1047].forEach((freq, i) => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.2, audioContext.currentTime + i * 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.15 + 0.3);
+        osc.start(audioContext.currentTime + i * 0.15);
+        osc.stop(audioContext.currentTime + i * 0.15 + 0.3);
+      });
+    } else if (type === 'defeat') {
+      oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.5);
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+    }
+  };
+
+  const enemyTurn = (player: Character, enemy: Character) => {
+    const availableSpells = enemy.spells.filter(s => s.manaCost <= enemy.mana && s.currentCooldown === 0);
+    if (availableSpells.length === 0) {
+      setBattleLog(prev => [...prev, `⏭️ ${enemy.name} пропускает ход (недостаточно маны)`]);
+      setIsPlayerTurn(true);
+      return;
+    }
+
+    const randomSpell = availableSpells[Math.floor(Math.random() * availableSpells.length)];
+    const newEnemyMana = enemy.mana - randomSpell.manaCost;
+    const restoredEnemyMana = Math.min(newEnemyMana + 30, enemy.maxMana);
+    const newPlayerHp = Math.max(0, player.hp - randomSpell.damage);
+
+    playSound('attack');
+    setEnemyCharacter({ ...enemy, mana: restoredEnemyMana });
+    setSelectedCharacter({ ...player, hp: newPlayerHp });
+    setBattleLog(prev => [...prev, `🔮 ${enemy.name} использует ${randomSpell.name}! Урон: ${randomSpell.damage}`]);
+
+    if (newPlayerHp === 0) {
+      setBattleLog(prev => [...prev, `💀 Поражение! ${player.name} повержен!`]);
+      playSound('defeat');
+      setGameOver(true);
+    } else {
+      setIsPlayerTurn(true);
+    }
+  };
+
   const castSpell = (spell: Spell) => {
-    if (!selectedCharacter || !enemyCharacter) return;
+    if (!selectedCharacter || !enemyCharacter || !isPlayerTurn || gameOver) return;
     if (selectedCharacter.mana < spell.manaCost) {
       setBattleLog(prev => [...prev, `❌ Недостаточно маны для ${spell.name}`]);
       return;
@@ -114,23 +187,39 @@ export default function Index() {
       return;
     }
 
-    const newPlayerChar = { ...selectedCharacter, mana: selectedCharacter.mana - spell.manaCost };
+    playSound('attack');
+    const newPlayerMana = selectedCharacter.mana - spell.manaCost;
+    const restoredPlayerMana = Math.min(newPlayerMana + 30, selectedCharacter.maxMana);
     const newEnemyHp = Math.max(0, enemyCharacter.hp - spell.damage);
-    const newEnemyChar = { ...enemyCharacter, hp: newEnemyHp };
 
-    setSelectedCharacter(newPlayerChar);
-    setEnemyCharacter(newEnemyChar);
+    setSelectedCharacter({ ...selectedCharacter, mana: restoredPlayerMana });
+    setEnemyCharacter({ ...enemyCharacter, hp: newEnemyHp });
     setBattleLog(prev => [...prev, `⚔️ ${selectedCharacter.name} использует ${spell.name}! Урон: ${spell.damage}`]);
 
     if (newEnemyHp === 0) {
       setBattleLog(prev => [...prev, `🏆 Победа! ${enemyCharacter.name} повержен!`]);
+      playSound('victory');
+      setGameOver(true);
+    } else {
+      setIsPlayerTurn(false);
     }
   };
+
+  useEffect(() => {
+    if (!isPlayerTurn && selectedCharacter && enemyCharacter && !gameOver) {
+      const timer = setTimeout(() => {
+        enemyTurn(selectedCharacter, enemyCharacter);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isPlayerTurn, selectedCharacter, enemyCharacter, gameOver]);
 
   const startBattle = (player: Character, enemy: Character) => {
     setSelectedCharacter({ ...player });
     setEnemyCharacter({ ...enemy });
     setBattleLog([`⚔️ Бой начат! ${player.name} VS ${enemy.name}`]);
+    setIsPlayerTurn(true);
+    setGameOver(false);
   };
 
   const getElementColor = (element: 'fire' | 'ice' | 'dark') => {
@@ -252,14 +341,25 @@ export default function Index() {
                       </div>
                     </div>
 
+                    <div className="mb-3 text-center">
+                      {gameOver ? (
+                        <Badge variant="outline" className="text-sm py-1">
+                          Бой завершён
+                        </Badge>
+                      ) : (
+                        <Badge variant={isPlayerTurn ? 'default' : 'secondary'} className="text-sm py-1 animate-pulse">
+                          {isPlayerTurn ? '🎯 Ваш ход' : '⏳ Ход противника'}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       {selectedCharacter.spells.map(spell => (
                         <Button
                           key={spell.id}
                           onClick={() => castSpell(spell)}
-                          disabled={selectedCharacter.mana < spell.manaCost || spell.currentCooldown > 0}
+                          disabled={!isPlayerTurn || gameOver || selectedCharacter.mana < spell.manaCost || spell.currentCooldown > 0}
                           className="flex flex-col items-center gap-1 h-auto py-3"
-                          variant={selectedCharacter.mana >= spell.manaCost ? 'default' : 'outline'}
+                          variant={selectedCharacter.mana >= spell.manaCost && isPlayerTurn && !gameOver ? 'default' : 'outline'}
                         >
                           <Icon name={spell.icon as any} className="h-5 w-5" />
                           <span className="text-xs font-semibold">{spell.name}</span>
