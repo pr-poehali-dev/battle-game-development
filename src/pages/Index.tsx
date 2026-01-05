@@ -35,6 +35,9 @@ export default function Index() {
   const [battleLog, setBattleLog] = useState<string[]>([]);
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [gameOver, setGameOver] = useState(false);
+  const [battleResult, setBattleResult] = useState<'victory' | 'defeat' | null>(null);
+  const [turnCount, setTurnCount] = useState(0);
+  const [damageDealt, setDamageDealt] = useState(0);
 
   const characters: Character[] = [
     {
@@ -171,6 +174,7 @@ export default function Index() {
       setBattleLog(prev => [...prev, `💀 Поражение! ${player.name} повержен!`]);
       playSound('defeat');
       setGameOver(true);
+      setBattleResult('defeat');
     } else {
       setIsPlayerTurn(true);
     }
@@ -195,11 +199,14 @@ export default function Index() {
     setSelectedCharacter({ ...selectedCharacter, mana: restoredPlayerMana });
     setEnemyCharacter({ ...enemyCharacter, hp: newEnemyHp });
     setBattleLog(prev => [...prev, `⚔️ ${selectedCharacter.name} использует ${spell.name}! Урон: ${spell.damage}`]);
+    setTurnCount(prev => prev + 1);
+    setDamageDealt(prev => prev + spell.damage);
 
     if (newEnemyHp === 0) {
       setBattleLog(prev => [...prev, `🏆 Победа! ${enemyCharacter.name} повержен!`]);
       playSound('victory');
       setGameOver(true);
+      setBattleResult('victory');
     } else {
       setIsPlayerTurn(false);
     }
@@ -220,6 +227,29 @@ export default function Index() {
     setBattleLog([`⚔️ Бой начат! ${player.name} VS ${enemy.name}`]);
     setIsPlayerTurn(true);
     setGameOver(false);
+    setBattleResult(null);
+    setTurnCount(0);
+    setDamageDealt(0);
+  };
+
+  const restartBattle = () => {
+    if (!selectedCharacter || !enemyCharacter) return;
+    const freshPlayer = characters.find(c => c.id === selectedCharacter.id);
+    const freshEnemy = characters.find(c => c.id === enemyCharacter.id);
+    if (freshPlayer && freshEnemy) {
+      startBattle(freshPlayer, freshEnemy);
+    }
+  };
+
+  const exitBattle = () => {
+    setSelectedCharacter(null);
+    setEnemyCharacter(null);
+    setBattleLog([]);
+    setGameOver(false);
+    setBattleResult(null);
+    setIsPlayerTurn(true);
+    setTurnCount(0);
+    setDamageDealt(0);
   };
 
   const getElementColor = (element: 'fire' | 'ice' | 'dark') => {
@@ -404,17 +434,64 @@ export default function Index() {
                   </Card>
                 </div>
 
-                <Card className="p-4">
-                  <h4 className="font-heading font-semibold mb-2 flex items-center">
-                    <Icon name="ScrollText" className="mr-2 h-4 w-4" />
-                    Журнал боя
-                  </h4>
-                  <div className="space-y-1 max-h-40 overflow-y-auto">
-                    {battleLog.map((log, i) => (
-                      <p key={i} className="text-sm text-muted-foreground">{log}</p>
-                    ))}
-                  </div>
-                </Card>
+                {battleResult ? (
+                  <Card className={`p-8 text-center ${battleResult === 'victory' ? 'border-fire' : 'border-destructive'} border-2 animate-scale-in`}>
+                    <div className="mb-4">
+                      <div className="text-8xl mb-4 animate-spell-cast">
+                        {battleResult === 'victory' ? '🏆' : '💀'}
+                      </div>
+                      <h2 className={`text-4xl font-heading font-bold mb-2 ${battleResult === 'victory' ? 'text-fire' : 'text-destructive'}`}>
+                        {battleResult === 'victory' ? 'Победа!' : 'Поражение'}
+                      </h2>
+                      <p className="text-muted-foreground text-lg mb-6">
+                        {battleResult === 'victory' 
+                          ? `${enemyCharacter.name} повержен в бою!` 
+                          : `${selectedCharacter.name} пал в неравной схватке`}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4 mb-6 max-w-md mx-auto">
+                      <div className="p-4 bg-muted/50 rounded-lg">
+                        <Icon name="Zap" className="h-6 w-6 mx-auto mb-2 text-fire" />
+                        <div className="text-2xl font-heading font-bold">{damageDealt}</div>
+                        <div className="text-xs text-muted-foreground">Урона</div>
+                      </div>
+                      <div className="p-4 bg-muted/50 rounded-lg">
+                        <Icon name="Swords" className="h-6 w-6 mx-auto mb-2 text-ice" />
+                        <div className="text-2xl font-heading font-bold">{turnCount}</div>
+                        <div className="text-xs text-muted-foreground">Ходов</div>
+                      </div>
+                      <div className="p-4 bg-muted/50 rounded-lg">
+                        <Icon name="Heart" className="h-6 w-6 mx-auto mb-2 text-destructive" />
+                        <div className="text-2xl font-heading font-bold">{selectedCharacter.hp}</div>
+                        <div className="text-xs text-muted-foreground">HP осталось</div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 justify-center">
+                      <Button onClick={restartBattle} size="lg" className="font-heading">
+                        <Icon name="RotateCcw" className="mr-2 h-5 w-5" />
+                        Реванш
+                      </Button>
+                      <Button onClick={exitBattle} variant="outline" size="lg" className="font-heading">
+                        <Icon name="ArrowLeft" className="mr-2 h-5 w-5" />
+                        Выход
+                      </Button>
+                    </div>
+                  </Card>
+                ) : (
+                  <Card className="p-4">
+                    <h4 className="font-heading font-semibold mb-2 flex items-center">
+                      <Icon name="ScrollText" className="mr-2 h-4 w-4" />
+                      Журнал боя
+                    </h4>
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {battleLog.map((log, i) => (
+                        <p key={i} className="text-sm text-muted-foreground">{log}</p>
+                      ))}
+                    </div>
+                  </Card>
+                )}
               </div>
             ) : (
               <Card className="p-12 text-center">
